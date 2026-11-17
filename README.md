@@ -152,6 +152,19 @@ Settings are saved to `%APPDATA%\UnrealVRMod\Scorn-Win64-Shipping\data\scorn_vr_
 
 See [dev/README.md](dev/README.md).
 
+## Claude Code skill: making UEVR profiles for other games
+
+The lessons from this project are packaged as a [Claude Code](https://claude.com/claude-code) skill:
+[`.claude/skills/uevr-profile`](.claude/skills/uevr-profile/SKILL.md). It contains:
+- verified UEVR Lua API facts;
+- the full-body + IK architecture with a failure table;
+- a live in-game debugging workflow (debug camera, simulated controllers, screenshots, eval);
+- templates: a hot-reload loader, a core skeleton, UE math, a UEVR mock for offline tests.
+
+**Use it:** open this repository in Claude Code (the skill is picked up automatically), or copy the folder to `~/.claude/skills/` to use it in any project.
+
+Опыт этого проекта упакован в навык для Claude Code: [`.claude/skills/uevr-profile`](.claude/skills/uevr-profile/SKILL.md). Он помогает делать UEVR-профили для других UE-игр. Откройте репозиторий в Claude Code или скопируйте папку в `~/.claude/skills/`.
+
 ## License
 
 [MIT](LICENSE)
