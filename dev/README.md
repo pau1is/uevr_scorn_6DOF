@@ -50,6 +50,10 @@ The core reads `%APPDATA%\UnrealVRMod\Scorn-Win64-Shipping\data\scorn_vr_debug.j
 | `cam: {abs, fwd, right, up, turn, pitch}` | debug camera. With `abs` it is relative to the game camera and pawn yaw, independent of the HMD |
 | `sim_ctrl`, `sim_ctrl_l` `[fwd,right,up]`, `sim_rot`, `sim_rot_l` | simulated controllers (cm, body frame) |
 | `force_ik` | IK on even without a weapon or active controllers |
+| `force_lock` | `true`/`false` overrides the interaction lock (native animation owns the body) |
+| `no_view_shift` | disables the eye correction for the console camera orbit during interactions |
+| `keep_roomscale` | keeps UEVR roomscale movement on during interactions |
+| `cam.yaw` | absolute view yaw for the debug camera (position untouched) |
 | `sim_head_yaw` | fixed body yaw offset (deg) |
 | `hide_parts: [names]` | hide pawn components |
 | `show_game_mesh`, `hide_copy` | compare the game mesh with the copy |
@@ -57,7 +61,7 @@ The core reads `%APPDATA%\UnrealVRMod\Scorn-Win64-Shipping\data\scorn_vr_debug.j
 | `record`, `record_bones` | per-frame bone recording → `scorn_vr_record.json` |
 | `eval` (+ `eval_id`) | runs a Lua snippet in the game, result in `status.m.eval` |
 
-Helpers in `dev/tools`: `shot.ps1` (window screenshot via `PrintWindow`), `dbg.sh <name> '<json>'` (set debug + screenshot), `eval.sh <file.lua>`, `batch.sh` (waits for an active HMD, then captures a set of views). The `e_*.lua` files are example eval snippets.
+Helpers in `dev/tools`: `shot.ps1` (window screenshot via `PrintWindow`), `dbg.sh <name> '<json>'` (set debug + screenshot), `eval.sh <file.lua>`, `batch.sh` (waits for an active HMD, then captures a set of views). `e_origin_shift.lua` simulates a head movement by shifting UEVR's standing origin (roomscale test without wearing the headset; run it again with the opposite sign). `lock_sweep.py` measures the eye position at a console for several control yaws with and without the eye correction. `sample.sh <file.lua> <count> [interval]` (run a snippet repeatedly, one JSON line per sample, e.g. with `e_lock_sample.lua` while turning the head at a console). The `e_*.lua` files are example eval snippets.
 
 > Do **not** call gameplay functions (`SetAiming`, `TryReload`, ...) through `eval`. They can leave the character in a stuck state that only a game restart fixes. Let a human press the buttons.
 

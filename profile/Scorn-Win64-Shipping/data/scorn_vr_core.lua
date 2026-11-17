@@ -13,6 +13,8 @@
   * Parasite arms stay on the body and only reach for the nearest hand during
     hand-over animations (ammo apparatus on reload)
   * Aim: head without a weapon, right controller with a weapon
+  * Interactions (consoles, items, scripted events; from AScornCharacter.CharacterState):
+    the native animation owns the body - no IK, no body yaw from the headset, no stick turning
   * Settings: UEVR menu -> "Script UI" -> "Scorn VR"
   * Files in UnrealVRMod/Scorn-Win64-Shipping/data:
       scorn_vr_config.json  - settings
@@ -30,7 +32,8 @@ local api = uevr.api
 local vr = uevr.params.vr
 local callbacks = uevr.sdk.callbacks
 
-local VERSION = "1.0.0"
+local VERSION = "1.1.0"
+local COMPAT_CONFIG_VERSIONS = { ["1.0.0"] = true, ["1.1.0"] = true }
 local CONFIG_FILE = "scorn_vr_config.json"
 local DUMP_FILE = "scorn_vr_dump.json"
 local STATUS_FILE = "scorn_vr_status.json"
@@ -46,6 +49,7 @@ local BONE = {
     l_wrist    = "mc_wrist_SH_l_jnt",
     head       = "mc_head_SH_01_jnt",
     camera     = "camera_rot_x_SH_jnt",
+    camera_base = "camera_SH_jnt",
     root       = "mc_root_SH_jnt",
 }
 
@@ -53,6 +57,22 @@ local BONE = {
 local P_CHAIN = {
     r = { { "p_shoulder_SH_r_jnt", "mc_shoulder_SH_r_jnt" }, { "p_elbow_SH_r_jnt", "mc_elbow_SH_r_jnt" }, { "p_wrist_SH_r_jnt", "mc_wrist_SH_r_jnt" } },
     l = { { "p_shoulder_SH_l_jnt", "mc_shoulder_SH_l_jnt" }, { "p_elbow_SH_l_jnt", "mc_elbow_SH_l_jnt" }, { "p_wrist_SH_l_jnt", "mc_wrist_SH_l_jnt" } },
+}
+
+-- AScornCharacter.CharacterState (native enum ECharacterState, declaration order from the game
+-- binary). Verified at runtime through KismetNodeHelperLibrary when possible.
+local CHAR_STATE_NAMES = { [0] = "Idle", "Aiming", "Reloading", "InInventory", "WeaponSwitching", "Healing",
+    "UsingConsole", "UsingItem", "UsingItem_Fail", "UsingGeneric", "Paralyzed", "InWorldEventAnim",
+    "Resurrected", "InGloryKill", "ThrownOnGround", "Grabbed", "LockedByParasite", "UsingConsole_Fail",
+    "WaitingForParasiteAttack", "SentryRail" }
+
+-- states in which the developers' animation owns the body and the arms (consoles, items,
+-- scripted events): no IK, no body yaw from the headset, no stick turning
+local LOCK_STATES = {
+    InInventory = true, Healing = true,
+    UsingConsole = true, UsingConsole_Fail = true, UsingItem = true, UsingItem_Fail = true, UsingGeneric = true,
+    Paralyzed = true, InWorldEventAnim = true, Resurrected = true, InGloryKill = true,
+    ThrownOnGround = true, Grabbed = true, LockedByParasite = true, WaitingForParasiteAttack = true,
 }
 
 ---------------------------------------------------------------------------
@@ -84,6 +104,7 @@ local defaults = {
     block_stick_pitch = true,
     disable_player_shadows = true,
     auto_aim_switch = true,
+    lock_on_interaction = true,
 
     -- wrist placement relative to the controller (controller space: X fwd, Y right, Z up)
     grip_pitch = 0.0,
@@ -109,7 +130,7 @@ end
 local function load_config()
     cfg = deep_copy(defaults)
     local ok, data = pcall(json.load_file, CONFIG_FILE)
-    if ok and type(data) == "table" and data.version == VERSION then
+    if ok and type(data) == "table" and COMPAT_CONFIG_VERSIONS[data.version] then
         for k, v in pairs(data) do
             if defaults[k] ~= nil and type(v) == type(defaults[k]) then cfg[k] = v end
         end
@@ -463,6 +484,8 @@ local function fresh_state()
         status = "waiting for pawn",
         last_aim = -1, stable_want = -1, stable_time = 0.0,
         gameplay_active = false,
+        char_state = nil, char_state_name = nil,
+        locked = false, lock_alpha = 0.0, yaw_resync = false, cam_yaw = nil, view_shift = nil,
         shadow_done = {},
         stats = { frames = 0, ik_frames = 0, yaw_frames = 0, last_yaw_delta = 0, reach = 0, weapon_follow = "?" },
     }
@@ -832,6 +855,8 @@ local function apply_body_yaw(view_rotation)
         S.body_yaw = normalize_axis(S.body_yaw + (math.abs(diff) - dz) * (diff > 0 and 1 or -1))
     end
     local delta = normalize_axis(S.body_yaw - pawn_rot.Yaw)
+    -- interaction animations: the body keeps the game's orientation (blended in/out)
+    delta = delta * (1.0 - S.lock_alpha)
     S.stats.last_yaw_delta = delta
     M_.body_delta = delta
     if math.abs(delta) < 0.05 then return end
@@ -1168,7 +1193,8 @@ local function render_update(view_rotation)
     local using = true
     pcall(function() using = vr.is_using_controllers() end)
     local sim = type(DBG.sim_ctrl) == "table"
-    local want_ik = cfg.arms_mode == 2 and (S.weapon_active and S.weapon_active_time > 0.25 or DBG.force_ik)
+    local want_ik = cfg.arms_mode == 2 and not S.locked
+        and (S.weapon_active and S.weapon_active_time > 0.25 or DBG.force_ik)
         and (using or sim) and (sim or (S.helper ~= nil and exists(S.helper)))
     M_.want_ik, M_.using = want_ik, using
     local target_alpha = want_ik and 1.0 or 0.0
@@ -1344,6 +1370,7 @@ local function apply_debug_cam(position, rotation)
     position.y = position.y + off.y
     position.z = position.z + off.z
     if c.turn then rotation.y = yaw + c.turn end
+    if c.yaw then rotation.y = c.yaw end -- absolute view yaw (position untouched)
     if c.pitch then rotation.x = c.pitch end
 end
 
@@ -1351,14 +1378,44 @@ callbacks.on_pre_calculate_stereo_view_offset(function(device, view_index)
     M_.pre_calls = (M_.pre_calls or 0) + 1
 end)
 
+-- While the pawn is held by an interaction, head yaw turns the game's camera bone (CameraYaw,
+-- clamped around the console) and that bone orbits camera_SH_jnt (~17 cm). In VR this slides the
+-- eyes sideways against the console. Returns the world offset that puts the eyes back on the
+-- orbit point for the body's forward direction (horizontal only; pitch behaves as in gameplay).
+local function lock_view_shift()
+    if S.lock_alpha <= 0.0 or S.cam_yaw == nil or DBG.no_view_shift then return nil end
+    local mesh = S.mesh
+    if not exists(mesh) or not exists(S.pawn) then return nil end
+    local rel = normalize_axis(S.cam_yaw - S.pawn:K2_GetActorRotation().Yaw)
+    M_.lock_cam_rel_yaw = rel
+    if math.abs(rel) < 0.05 then return nil end
+    local c0 = V(mesh:GetSocketLocation(BONE.camera_base))
+    local cb = V(mesh:GetSocketLocation(BONE.camera))
+    local v = { x = cb.x - c0.x, y = cb.y - c0.y, z = 0.0 }
+    local r = qrot(qyaw(-rel * S.lock_alpha), v)
+    local shift = { x = r.x - v.x, y = r.y - v.y, z = 0.0 }
+    M_.lock_view_shift = vlen(shift)
+    return shift
+end
+
 callbacks.on_post_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
     M_.post_calls = (M_.post_calls or 0) + 1
     M_.last_view_index = view_index
     M_.frame_done_at_post = S.frame_done
     if view_index % 2 == 1 and not S.frame_done then
         S.frame_done = true
+        -- before render_update: it may rotate the game mesh for this frame
+        local ok_v, v = pcall(lock_view_shift)
+        if ok_v then S.view_shift = v else S.view_shift = nil; log_error_once("view_shift", v) end
         local ok, err = pcall(render_update, rotation)
         if not ok then log_error_once("render_update", err) end
+    end
+    if S.view_shift and position then
+        local sh = S.view_shift
+        position.x, position.y, position.z = position.x + sh.x, position.y + sh.y, position.z + sh.z
+    end
+    if view_index % 2 == 1 and position and next(DBG) ~= nil then
+        M_.eye_w = { x = position.x, y = position.y, z = position.z }
     end
     if DBG.cam then pcall(apply_debug_cam, position, rotation) end
 end)
@@ -1459,12 +1516,120 @@ local function update_aim(dt)
     end
 end
 
-local function sync_pawn_yaw(pc)
+local function sync_pawn_yaw(pc, dt)
     local pawn = S.pawn
     pawn.bUseControllerRotationYaw = false
+    -- interaction animations: the game places and turns the character itself
+    if S.locked then return end
     local control_rot = pc:GetControlRotation()
     local pawn_rot = pawn:K2_GetActorRotation()
-    pawn:K2_SetActorRotation({ Pitch = pawn_rot.Pitch, Yaw = control_rot.Yaw, Roll = pawn_rot.Roll }, false)
+    local yaw = control_rot.Yaw
+    if S.yaw_resync then
+        -- after an interaction: turn back to the view direction smoothly instead of popping
+        local diff = normalize_axis(yaw - pawn_rot.Yaw)
+        local max_step = 540.0 * dt
+        if math.abs(diff) > max_step then
+            yaw = normalize_axis(pawn_rot.Yaw + (diff > 0 and max_step or -max_step))
+        else
+            S.yaw_resync = false
+        end
+    end
+    pawn:K2_SetActorRotation({ Pitch = pawn_rot.Pitch, Yaw = yaw, Roll = pawn_rot.Roll }, false)
+end
+
+---------------------------------------------------------------------------
+-- Interaction lock: let the native animation own the body during consoles, items and
+-- scripted events (detected from AScornCharacter.CharacterState)
+---------------------------------------------------------------------------
+-- UEVR roomscale movement moves the pawn after the headset every frame. Turning the head moves
+-- the headset a few cm, so at a console the body and hands slid away from the use spot. It is
+-- paused while the animation owns the body and restored afterwards (the pawn then catches up
+-- with the head in one step, the view stays continuous). Module level: survives pawn changes.
+-- A marker file remembers a paused roomscale, so a crash/exit mid-interaction cannot leave it off.
+local ROOMSCALE_FILE = "scorn_vr_roomscale.json"
+local roomscale = { suspended = false, original = nil }
+
+local function suspend_roomscale(on)
+    if on == roomscale.suspended then return end
+    if on then
+        local ok, v = pcall(function() return vr:get_mod_value("VR_RoomscaleMovement") end)
+        if not ok or type(v) ~= "string" then return end
+        roomscale.original = v
+        if v:find("true") then
+            pcall(json.dump_file, ROOMSCALE_FILE, { paused = true }, 0)
+            pcall(function() vr.set_mod_value("VR_RoomscaleMovement", "false") end)
+            log("roomscale movement paused")
+        end
+        roomscale.suspended = true
+    else
+        if roomscale.original and roomscale.original:find("true") then
+            pcall(function() vr.set_mod_value("VR_RoomscaleMovement", "true") end)
+            pcall(json.dump_file, ROOMSCALE_FILE, { paused = false }, 0)
+            log("roomscale movement restored")
+        end
+        roomscale.suspended, roomscale.original = false, nil
+    end
+end
+
+do -- left paused by a previous session?
+    local ok, d = pcall(json.load_file, ROOMSCALE_FILE)
+    if ok and type(d) == "table" and d.paused == true then
+        pcall(function() vr.set_mod_value("VR_RoomscaleMovement", "true") end)
+        pcall(json.dump_file, ROOMSCALE_FILE, { paused = false }, 0)
+        log("roomscale movement restored (left paused by a previous session)")
+    end
+end
+
+local state_names_checked = false
+local function verify_state_names()
+    if state_names_checked then return end
+    state_names_checked = true
+    local ok, err = pcall(function()
+        local en = api:find_uobject("Enum /Script/Scorn.ECharacterState")
+        local cls = api:find_uobject("Class /Script/Engine.KismetNodeHelperLibrary")
+        if en == nil or cls == nil then error("enum or helper library not found") end
+        local lib = cls:get_class_default_object()
+        local mism = 0
+        for i = 0, #CHAR_STATE_NAMES do
+            local n = fname_str(lib:GetEnumeratorName(en, i)):gsub("^.*::", "")
+            if n ~= "" and n ~= "None" and n ~= CHAR_STATE_NAMES[i] then
+                log("character state " .. i .. " is " .. n .. " (expected " .. tostring(CHAR_STATE_NAMES[i]) .. ")")
+                CHAR_STATE_NAMES[i] = n
+                mism = mism + 1
+            end
+        end
+        log("character state names verified, " .. mism .. " corrected")
+    end)
+    if not ok then log("character state names not verified (using built-in list): " .. tostring(err)) end
+end
+
+local function update_interaction_lock(dt)
+    local st = nil
+    pcall(function() st = S.pawn.CharacterState end)
+    local name = "-"
+    if type(st) == "number" then
+        verify_state_names()
+        name = CHAR_STATE_NAMES[st] or tostring(st)
+    end
+    local in_inv = false
+    pcall(function() in_inv = S.pawn.bInInventoryAnim == true end)
+    local locked = cfg.lock_on_interaction and (LOCK_STATES[name] == true or in_inv)
+    if DBG.force_lock ~= nil then locked = DBG.force_lock == true end
+    S.char_state = st
+    S.cam_yaw = nil
+    pcall(function() local y = S.pawn.CameraYaw; if type(y) == "number" then S.cam_yaw = y end end)
+    if name ~= S.char_state_name or locked ~= S.locked then
+        log("character state: " .. name .. (locked and " -> native animation (body locked)" or ""))
+        S.char_state_name = name
+    end
+    if S.locked and not locked then S.yaw_resync = true end
+    S.locked = locked
+    suspend_roomscale(locked and not DBG.keep_roomscale)
+    local target = locked and 1.0 or 0.0
+    local step = math.min(0.1, dt) * 4.0
+    if S.lock_alpha < target then S.lock_alpha = math.min(target, S.lock_alpha + step)
+    elseif S.lock_alpha > target then S.lock_alpha = math.max(target, S.lock_alpha - step) end
+    M_.char_state, M_.locked, M_.lock_alpha = name, locked, S.lock_alpha
 end
 
 ---------------------------------------------------------------------------
@@ -1491,6 +1656,7 @@ local function dump_diagnostics(reason)
         return
     end
     out.pawn = full_name(S.pawn)
+    out.character_state = { value = S.char_state, name = S.char_state_name, locked = S.locked }
     if exists(S.mesh) then
         out.mesh = describe_comp(S.mesh)
         local parents = {}
@@ -1540,6 +1706,7 @@ local function write_status(dt)
         remastered = 0, parts = #S.parts, stats = S.stats,
         using_controllers = (function() local u = nil pcall(function() u = vr.is_using_controllers() end) return u end)(),
         aim = S.last_aim,
+        char_state = S.char_state, char_state_name = S.char_state_name, locked = S.locked, lock_alpha = S.lock_alpha,
         m = M_, debug = DBG,
         hmd_active = (function() local u = nil pcall(function() u = vr.is_hmd_active() end) return u end)(),
         fps = (S.last_dt and S.last_dt > 0) and (1.0 / S.last_dt) or 0,
@@ -1588,16 +1755,22 @@ local function tick(dt)
 
     if not update_pawn() then
         S.gameplay_active = false
+        pcall(suspend_roomscale, false)
         return
     end
     local pc = api:get_player_controller(0)
     if pc == nil then
         S.gameplay_active = false
+        pcall(suspend_roomscale, false)
         return
     end
     S.gameplay_active = not is_paused()
 
     update_weapon(dt)
+    do
+        local ok, err = pcall(update_interaction_lock, dt)
+        if not ok then log_error_once("interaction_lock", err) end
+    end
 
     S.scan_timer = S.scan_timer - dt
     if S.scan_timer <= 0.0 then
@@ -1644,11 +1817,14 @@ local function tick(dt)
     end
 
     pcall(update_aim, dt)
-    if cfg.turn_enabled and S.gameplay_active then
+    if S.locked then
+        -- no stick turning while the animation owns the body (and no queued snap afterwards)
+        turn.snap_pending = 0
+    elseif cfg.turn_enabled and S.gameplay_active then
         local ok, err = pcall(apply_turn, pc, dt)
         if not ok then log_error_once("turn", err) end
     end
-    pcall(sync_pawn_yaw, pc)
+    pcall(sync_pawn_yaw, pc, dt)
 
     if S.weapon_active and S.weapon_active_time > 2.0 and not dumped_this_session then
         dumped_this_session = true
@@ -1690,6 +1866,7 @@ callbacks.on_draw_ui(function()
     if not imgui.collapsing_header("Scorn VR v" .. VERSION) then return end
     imgui.text("Status: " .. S.status .. "   Weapon: " .. (S.weapon_class ~= "" and S.weapon_class or "-"))
     imgui.text(string.format("IK %.2f  reach err %.1f cm  weapon: %s", S.ik_alpha, S.stats.reach or 0, S.stats.weapon_follow))
+    imgui.text("Character state: " .. tostring(S.char_state_name or "-") .. (S.locked and "  (native animation)" or ""))
 
     if imgui.tree_node("Turning") then
         ui_checkbox("Enable stick turning", "turn_enabled")
@@ -1718,6 +1895,7 @@ callbacks.on_draw_ui(function()
         ui_checkbox("Keep weapon animation offsets (recoil/reload)", "keep_anim_offsets")
         ui_checkbox("Disable player shadows", "disable_player_shadows")
         ui_checkbox("Aim: head without weapon, controller with weapon", "auto_aim_switch")
+        ui_checkbox("Native animation during interactions (consoles, items)", "lock_on_interaction")
         imgui.tree_pop()
     end
 
@@ -1751,6 +1929,7 @@ end)
 -- Cleanup
 ---------------------------------------------------------------------------
 callbacks.on_script_reset(function()
+    pcall(suspend_roomscale, false)
     pcall(restore_moved)
     pcall(destroy_poseable)
     pcall(unhide_all_parts)
