@@ -1,0 +1,20 @@
+# local scratch / third-party profiles / generated
+/work/
+/profiles/
+/dist/
+/shots/
+__pycache__/
+*.pyc
+
+# UEVR runtime files that may end up in a profile folder
+log.txt
+crash.dmp
+*.dmp
+imgui.ini
+scorn_vr_config.json
+scorn_vr_log.txt
+scorn_vr_status.json
+scorn_vr_dump.json
+scorn_vr_debug.json
+scorn_vr_record.json
+scorn_vr_loader.txt
