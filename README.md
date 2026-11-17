@@ -14,6 +14,7 @@
 - **Паразит и «магазин» с патронами** остаются на теле и тянутся к руке во время перезарядки.
 - **Snap-поворот на 45°** на правом стике. Плавный поворот и угол настраиваются.
 - **Прицел**: без оружия — головой, с оружием — правым контроллером.
+- **Штатная анимация при взаимодействии**: у пультов, с предметами и в скриптовых сценах телом и руками управляет анимация игры. IK, поворот тела за шлемом, поворот стиком и roomscale-перемещение UEVR на это время отключаются.
 
 ### Требования
 
@@ -52,7 +53,7 @@
 Меню UEVR → вкладка **Script UI** → **Scorn VR**:
 
 - **Turning**: snap или плавный поворот, угол, стик, блокировка наклона стиком.
-- **Body / arms**: режим (тело + IK / тело без IK / только оружие), поворот тела за головой, мёртвая зона поворота, скрытие головы, вторая рука на оружии.
+- **Body / arms**: режим (тело + IK / тело без IK / только оружие), поворот тела за головой, мёртвая зона поворота, скрытие головы, вторая рука на оружии, штатная анимация при взаимодействии (`Native animation during interactions`).
 - **Hand placement**: положение кисти относительно контроллера (углы и смещение) и направление локтя (`Elbow down bias`).
 
 Настройки сохраняются в `%APPDATA%\UnrealVRMod\Scorn-Win64-Shipping\data\scorn_vr_config.json`.
@@ -67,7 +68,8 @@
 ### Известные ограничения
 
 - Проверены пистолет, дробовик, ближний бой, стрельба и перезарядка. С остальным оружием (гранатомёт, шокер и т. д.) возможны мелкие артефакты анимации.
-- IK пересчитывает только руки. Анимации взаимодействия с механизмами без оружия идут как в игре.
+- IK пересчитывает только руки.
+- Во время взаимодействия голову (обзор) по-прежнему поворачивает шлем, а тело и руки остаются в позе из анимации игры.
 - Рендер копии тела отстаёт на один кадр (ограничение `PoseableMeshComponent` в UE4). На глаз это обычно незаметно.
 
 ### Благодарности
@@ -87,6 +89,7 @@ A [UEVR](https://uevr.io) profile for **Scorn** (Steam, UE 4.27) that turns the 
 - **The parasite and the ammo apparatus** stay on the body and reach for your hand while reloading.
 - **45° snap turn** on the right stick. Smooth turn and the snap angle are configurable.
 - **Aiming**: head without a weapon, right controller with a weapon.
+- **Native interaction animations**: at consoles, with items and in scripted scenes the game's animation drives the body and arms. IK, body-follows-head, stick turning and UEVR roomscale movement are paused meanwhile.
 
 ### Requirements
 
@@ -125,7 +128,7 @@ Right stick up/down (look pitch) is blocked in gameplay: in VR the headset and t
 UEVR menu → **Script UI** tab → **Scorn VR**:
 
 - **Turning**: snap/smooth turn, angle, stick, stick pitch block.
-- **Body / arms**: mode (body + IK / body without IK / weapon only), body follows the head, turn deadzone, hide head, two-handed left hand.
+- **Body / arms**: mode (body + IK / body without IK / weapon only), body follows the head, turn deadzone, hide head, two-handed left hand, native animation during interactions (`Native animation during interactions`).
 - **Hand placement**: wrist offset and rotation relative to the controller, plus elbow direction (`Elbow down bias`).
 
 Settings are saved to `%APPDATA%\UnrealVRMod\Scorn-Win64-Shipping\data\scorn_vr_config.json`.
@@ -140,7 +143,8 @@ Settings are saved to `%APPDATA%\UnrealVRMod\Scorn-Win64-Shipping\data\scorn_vr_
 ### Known limitations
 
 - Tested: pistol, shotgun, melee, firing and reloading. Other weapons (grenade launcher, stun gun, ...) may show small animation artifacts.
-- Only the arms use IK. Unarmed interaction animations play as in the original game.
+- Only the arms use IK.
+- During interactions the headset still turns the view; the body and arms stay in the game's animated pose.
 - The body copy renders one frame behind (a UE4 `PoseableMeshComponent` limitation). It is usually not noticeable.
 
 ### Credits

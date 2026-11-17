@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0 — 2026-11-17
+
+- Native animations during interactions: at consoles, with items (inventory, healing) and in scripted events (grabbed, glory kill, parasite lock, ...) the game's animation owns the body and the arms. IK, body yaw from the headset and stick turning are paused and blend back in smoothly afterwards. Detected from the game's `CharacterState`. Toggle: **Body / arms → Native animation during interactions** (on by default).
+- During interactions the body and hands no longer slide away from the console when you turn or move your head. UEVR roomscale movement (which drags the pawn after the headset) is paused while the animation owns the body and restored right after. A marker file restores it if the game exits mid-interaction.
+- During interactions the eyes stay on the neutral point of the game's camera orbit (the camera bone swings ~17 cm around the neck with `CameraYaw`).
+- The character state is shown in the menu, the log and the dump (for bug reports).
+- Settings saved by 1.0.0 are kept.
+
 ## 1.0.0 — 2026-11-17
 
 First public release.

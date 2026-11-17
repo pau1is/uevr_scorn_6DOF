@@ -194,6 +194,7 @@ function make_poseable()
 end
 
 HELPER = nil
+MODS = { VR_RoomscaleMovement = "true" }
 local skel_class = { get_objects_matching = function() local t = {mesh, wm, corruption, parasite} if PM then t[#t+1] = PM end return t end }
 local scene_class = { get_objects_matching = function() return {mesh, wm, corruption, parasite, camera} end }
 local gs_class = { get_class_default_object = function() return { IsGamePaused = function() return false end } end }
@@ -214,7 +215,9 @@ uevr = {
     end,
   },
   params = { vr = { get_lowest_xinput_index = function() return 0 end, is_using_controllers = function() return true end,
-                    set_aim_method = function(m) AIM = m end } },
+                    set_aim_method = function(m) AIM = m end,
+                    get_mod_value = function(self, k) assert(type(self) == "table", "use vr:get_mod_value") return MODS[k] end,
+                    set_mod_value = function(k, v) assert(type(k) == "string") MODS[k] = v end } },
   sdk = { callbacks = {} },
 }
 CB = {}
