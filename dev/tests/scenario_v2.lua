@@ -20,6 +20,8 @@ check(PM ~= nil and PM._parent == mesh, "poseable created and attached to the me
 check(mesh._render == false, "game mesh hidden in main pass")
 check(PM._hidden["mc_head_SH_01_jnt"], "head hidden on copy")
 check(corruption._master == PM, "same-skeleton follower remastered to copy")
+check(corruption.bUseBoundsFromMasterPoseComponent == true, "follower uses the copy bounds")
+check(parasite.bUseBoundsFromMasterPoseComponent == nil, "foreign skeleton bounds untouched")
 check(parasite._master == nil, "foreign skeleton not remastered")
 check(PM._copies and PM._copies >= 5, "pose copied every frame")
 
@@ -104,6 +106,17 @@ local function xinput(rx)
   return st
 end
 local function mesh_yaw() local _, q = mesh:world() local _, y = M.rot_from_quat(q) return y end
+-- game camera yaw (Scorn's own) follows the synced pawn yaw outside interactions
+pawn.CameraYaw, pawn.StationaryCameraYaw = -78, -78
+pc._rot = {Pitch=0, Yaw=25, Roll=0}
+frame()
+check(pawn.CameraYaw == 25 and pawn.StationaryCameraYaw == 25, "unlocked: game camera yaw on the view yaw, got " .. pawn.CameraYaw)
+pawn.bOverrideYaw = true; pawn.CameraYaw = -5
+frame()
+check(pawn.CameraYaw == -5, "game override: camera yaw left alone")
+pawn.bOverrideYaw = nil; pawn.CameraYaw, pawn.StationaryCameraYaw = nil, nil
+pc._rot = {Pitch=0, Yaw=0, Roll=0}
+frame()
 pawn.CharacterState = 6 -- UsingConsole
 pawn._rot = {Pitch=0, Yaw=10, Roll=0}; capsule._lq = M.quat_from_rot(0, 10, 0) -- game turned the pawn to the console
 pc._rot = {Pitch=0, Yaw=0, Roll=0}
@@ -122,6 +135,7 @@ local ci = 0
 for i, b in ipairs(SKEL) do if b[1] == "camera_translate_rotate_y_z_SH_jnt" then ci = i end end
 mesh._pose[ci] = { p = mesh._pose[ci].p, q = M.quat_from_rot(0, 50, 0) }
 pawn.CameraYaw = 60 -- pawn yaw 10 + 50
+pawn.StationaryCameraYaw = 33
 frame()
 local pos = {x=0, y=0, z=0}
 CB.on_pre_engine_tick(nil, dt)
@@ -135,8 +149,9 @@ local ex, ey = c0.X + fwd10.x - cb.X, c0.Y + fwd10.y - cb.Y
 check(math.abs(pos.x - ex) + math.abs(pos.y - ey) + math.abs(pos.z) < 0.01,
   string.format("locked: eyes back on the neutral orbit point (%.2f,%.2f) vs (%.2f,%.2f)", pos.x, pos.y, ex, ey))
 check(math.abs(pos2.x - pos.x) + math.abs(pos2.y - pos.y) < 1e-6, "locked: same eye shift for both eyes")
+check(pawn.CameraYaw == 60 and pawn.StationaryCameraYaw == 33, "locked: game camera left to the game")
 mesh._pose[ci] = { p = mesh._pose[ci].p, q = {x=0,y=0,z=0,w=1} }
-pawn.CameraYaw = nil
+pawn.CameraYaw, pawn.StationaryCameraYaw = nil, nil
 local st = xinput(32767)
 check(st.Gamepad.sThumbRX == 0, "locked: turn stick still swallowed")
 frame(); xinput(0); frame()
@@ -184,5 +199,6 @@ check(MODS.VR_RoomscaleMovement == "true", "reset: roomscale restored")
 pawn.CharacterState = nil
 check(mesh._render == true, "reset: game mesh visible again")
 check(corruption._master == mesh, "reset: follower back to game mesh")
+check(corruption.bUseBoundsFromMasterPoseComponent == false, "reset: follower bounds flag restored")
 for _, l in ipairs(LOG) do check(not l:find("ERROR"), "error logged: " .. l) end
 return "v2 scenario OK\n" .. table.concat(LOG, "\n")

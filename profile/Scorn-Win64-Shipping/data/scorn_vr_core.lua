@@ -32,8 +32,8 @@ local api = uevr.api
 local vr = uevr.params.vr
 local callbacks = uevr.sdk.callbacks
 
-local VERSION = "1.1.0"
-local COMPAT_CONFIG_VERSIONS = { ["1.0.0"] = true, ["1.1.0"] = true }
+local VERSION = "1.2.0"
+local COMPAT_CONFIG_VERSIONS = { ["1.0.0"] = true, ["1.1.0"] = true, ["1.2.0"] = true }
 local CONFIG_FILE = "scorn_vr_config.json"
 local DUMP_FILE = "scorn_vr_dump.json"
 local STATUS_FILE = "scorn_vr_status.json"
@@ -105,6 +105,7 @@ local defaults = {
     disable_player_shadows = true,
     auto_aim_switch = true,
     lock_on_interaction = true,
+    sync_game_camera = true,
 
     -- wrist placement relative to the controller (controller space: X fwd, Y right, Z up)
     grip_pitch = 0.0,
@@ -649,13 +650,43 @@ local function set_mesh_render(mesh, render)
     end
 end
 
+-- Render bounds. The copy's own bounds are tight (the hands stick out of them) and the followers
+-- (apparatus/ammo, weapon, parasite) are culled by small bounds of their own, left at the hip
+-- while the animation brings them to the face: looking straight at them made them vanish or
+-- flicker. The copy gets larger bounds and the followers use the copy's bounds.
+local COPY_BOUNDS_SCALE = 2.0
+
+local function follower_bounds(c, on)
+    local a = addr(c)
+    S.follower_bounds = S.follower_bounds or {}
+    if on then
+        local first = S.follower_bounds[a] == nil
+        if first then
+            local orig = { flag = false, scale = 1.0 }
+            pcall(function() orig.flag = c.bUseBoundsFromMasterPoseComponent == true end)
+            pcall(function() local s = c.BoundsScale; if type(s) == "number" then orig.scale = s end end)
+            S.follower_bounds[a] = orig
+        end
+        pcall(function() c.bUseBoundsFromMasterPoseComponent = true end)
+        -- SetBoundsScale recomputes the bounds now (otherwise only on the next transform update)
+        if first then pcall(function() c:SetBoundsScale(S.follower_bounds[a].scale * 1.0001) end) end
+    elseif S.follower_bounds[a] ~= nil then
+        local orig = S.follower_bounds[a]
+        pcall(function() c.bUseBoundsFromMasterPoseComponent = orig.flag end)
+        pcall(function() c:SetBoundsScale(orig.scale) end)
+        S.follower_bounds[a] = nil
+    end
+end
+
 local function unmaster_all()
     for a, c in pairs(S.remastered) do
         if exists(c) and exists(S.mesh) then
             pcall(function() c:SetMasterPoseComponent(S.mesh, true) end)
+            follower_bounds(c, false)
         end
         S.remastered[a] = nil
     end
+    S.follower_bounds = {}
 end
 
 local function destroy_poseable()
@@ -680,6 +711,7 @@ local function create_poseable()
         end
         pcall(function() pm:SetCastShadow(false) end)
         pcall(function() pm:SetCastHiddenShadow(false) end)
+        if not DBG.no_bounds_fix then pcall(function() pm:SetBoundsScale(COPY_BOUNDS_SCALE) end) end
         pm:CopyPoseFromSkeletalComponent(S.mesh)
         S.pm = pm
     end)
@@ -717,6 +749,7 @@ local function remaster_followers()
         local a = addr(c)
         local ok, err = pcall(function() c:SetMasterPoseComponent(S.pm, false) end)
         if ok then
+            follower_bounds(c, not DBG.no_bounds_fix)
             if not S.remastered[a] then
                 S.remastered[a] = c
                 log("follower -> body copy: " .. short_name(c))
@@ -1535,6 +1568,14 @@ local function sync_pawn_yaw(pc, dt)
         end
     end
     pawn:K2_SetActorRotation({ Pitch = pawn_rot.Pitch, Yaw = yaw, Roll = pawn_rot.Roll }, false)
+    -- Scorn keeps its own camera yaw (turned only by stick input, never by ControlRotation). Walking
+    -- follows it, and the camera bone orbits the neck by (CameraYaw - actor yaw). Consoles and doors
+    -- leave it pointing elsewhere, so the character walked sideways and the eyes ended up behind the
+    -- head. Keep it on the same yaw as the pawn.
+    if cfg.sync_game_camera and not DBG.no_cam_sync and type(pawn.CameraYaw) == "number" and pawn.bOverrideYaw ~= true then
+        pawn.CameraYaw = yaw
+        if type(pawn.StationaryCameraYaw) == "number" then pawn.StationaryCameraYaw = yaw end
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -1896,6 +1937,7 @@ callbacks.on_draw_ui(function()
         ui_checkbox("Disable player shadows", "disable_player_shadows")
         ui_checkbox("Aim: head without weapon, controller with weapon", "auto_aim_switch")
         ui_checkbox("Native animation during interactions (consoles, items)", "lock_on_interaction")
+        ui_checkbox("Keep the game's camera on the view direction (walking)", "sync_game_camera")
         imgui.tree_pop()
     end
 
