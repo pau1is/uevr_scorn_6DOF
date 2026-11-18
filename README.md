@@ -53,7 +53,7 @@
 Меню UEVR → вкладка **Script UI** → **Scorn VR**:
 
 - **Turning**: snap или плавный поворот, угол, стик, блокировка наклона стиком.
-- **Body / arms**: режим (тело + IK / тело без IK / только оружие), поворот тела за головой, мёртвая зона поворота, скрытие головы, вторая рука на оружии, штатная анимация при взаимодействии (`Native animation during interactions`).
+- **Body / arms**: режим (тело + IK / тело без IK / только оружие), поворот тела за головой, мёртвая зона поворота, скрытие головы, вторая рука на оружии, штатная анимация при взаимодействии (`Native animation during interactions`), направление ходьбы по взгляду (`Keep the game's camera on the view direction`).
 - **Hand placement**: положение кисти относительно контроллера (углы и смещение) и направление локтя (`Elbow down bias`).
 
 Настройки сохраняются в `%APPDATA%\UnrealVRMod\Scorn-Win64-Shipping\data\scorn_vr_config.json`.
@@ -128,7 +128,7 @@ Right stick up/down (look pitch) is blocked in gameplay: in VR the headset and t
 UEVR menu → **Script UI** tab → **Scorn VR**:
 
 - **Turning**: snap/smooth turn, angle, stick, stick pitch block.
-- **Body / arms**: mode (body + IK / body without IK / weapon only), body follows the head, turn deadzone, hide head, two-handed left hand, native animation during interactions (`Native animation during interactions`).
+- **Body / arms**: mode (body + IK / body without IK / weapon only), body follows the head, turn deadzone, hide head, two-handed left hand, native animation during interactions (`Native animation during interactions`), walking follows the view (`Keep the game's camera on the view direction`).
 - **Hand placement**: wrist offset and rotation relative to the controller, plus elbow direction (`Elbow down bias`).
 
 Settings are saved to `%APPDATA%\UnrealVRMod\Scorn-Win64-Shipping\data\scorn_vr_config.json`.

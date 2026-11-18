@@ -53,6 +53,8 @@ The core reads `%APPDATA%\UnrealVRMod\Scorn-Win64-Shipping\data\scorn_vr_debug.j
 | `force_lock` | `true`/`false` overrides the interaction lock (native animation owns the body) |
 | `no_view_shift` | disables the eye correction for the console camera orbit during interactions |
 | `keep_roomscale` | keeps UEVR roomscale movement on during interactions |
+| `no_cam_sync` | stops aligning the game's own `CameraYaw`/`StationaryCameraYaw` with the pawn yaw |
+| `no_bounds_fix` | no larger copy bounds / no master bounds for followers (applies to newly created components) |
 | `cam.yaw` | absolute view yaw for the debug camera (position untouched) |
 | `sim_head_yaw` | fixed body yaw offset (deg) |
 | `hide_parts: [names]` | hide pawn components |

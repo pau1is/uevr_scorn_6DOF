@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 — 2026-11-18
+
+- Walking direction after consoles and doors: Scorn keeps its own camera yaw, turned only by stick input, and walking follows it. Interactions left it pointing elsewhere, so the character could walk sideways or backwards until you turned around physically. The mod now keeps it on the view direction outside interactions. Toggle: **Body / arms → Keep the game's camera on the view direction**.
+- No more "seeing yourself" after doors: the same misaligned camera yaw swung the camera bone behind the head.
+- Items no longer vanish or flicker when you look at them (inventory, ammo apparatus), and the arms/body no longer disappear in some animations. The body copy gets larger render bounds, and the attachments use the copy's bounds instead of small bounds of their own left at the hip.
+- Settings saved by 1.0.0/1.1.0 are kept.
+
 ## 1.1.0 — 2026-11-17
 
 - Native animations during interactions: at consoles, with items (inventory, healing) and in scripted events (grabbed, glory kill, parasite lock, ...) the game's animation owns the body and the arms. IK, body yaw from the headset and stick turning are paused and blend back in smoothly afterwards. Detected from the game's `CharacterState`. Toggle: **Body / arms → Native animation during interactions** (on by default).
